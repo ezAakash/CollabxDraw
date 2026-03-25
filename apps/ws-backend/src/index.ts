@@ -1,5 +1,6 @@
 import { WebSocketServer, WebSocket } from 'ws'
 import jwt from "jsonwebtoken"
+import { SECRET } from "@repo/backend-common/config"
 
 const ws = new WebSocketServer({ port: 8080 })
 
@@ -17,31 +18,12 @@ ws.on("connection", (socket, request) => {
     const queryParams = new URLSearchParams(url.split('?')[1])
     const token = queryParams.get('token') || ""
 
-    const response = jwt.verify(token, JWT_TOKEN) //env variable signature)
+    const response = jwt.verify(token, SECRET) //env variable signature)
 
     if (!response ) {
         socket.close()
         return;
     }
-
-    
-
-
-     try {
-            const response = jwt.verify(token, process.env.JWT_SECRET!) as { id: String }
-        
-            if (!response) {
-                return res.status(403).json({
-                    message: "Incorrect Credentials"
-                })
-            }
-
-            req.userId = response.id
-            next()
-        }
-        catch (e) {
-                res.status(403).json({ message: "Invalid or expired token"})
-        }
     
     socket.on("message", (message) => {
         // string to an object 
