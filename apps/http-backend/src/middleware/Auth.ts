@@ -1,0 +1,31 @@
+import { SECRET } from "@repo/backend-common/config";
+import jwt from "jsonwebtoken"
+
+export default function Auth() {
+    
+    return (req: any, res: any, next: any) => {
+        
+        let token = req.headers.authorization;
+        
+        token = token
+            .replace(/[Bb]earer\s+/g, "") 
+            .trim()                     
+            .replace(/^"(.*)"$/, "$1");
+        
+        try {
+            const response = jwt.verify(token, SECRET) as { id: String }
+        
+            if (!response) {
+                return res.status(403).json({
+                    message: "Incorrect Credentials"
+                })
+            }
+
+            req.userId = response.id
+            next()
+        }
+        catch (e) {
+                res.status(403).json({ message: "Invalid or expired token"})
+        }
+    }
+}
