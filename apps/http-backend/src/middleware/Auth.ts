@@ -6,6 +6,10 @@ export default function Auth() {
     return (req: any, res: any, next: any) => {
         
         let token = req.headers.authorization;
+
+        if (!token) {
+            return res.status(403).json({ message: "Authorization header missing" })
+        }
         
         token = token
             .replace(/[Bb]earer\s+/g, "") 

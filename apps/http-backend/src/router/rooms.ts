@@ -1,14 +1,15 @@
 import express, { Router } from "express"
 import Auth from "../middleware/Auth"
-import { RoomSchema } from "@repo/backend-common/zod_schema"
+import { CreateRoomSchema, JoinRoomSchema } from "@repo/backend-common/zod_schema"
 import { prisma } from "@repo/db/prisma"
+import bcrypt from "bcrypt"
 
 export const roomRouter: Router = express.Router()
 
 
 roomRouter.post("/create", Auth(),  async (req, res) => {
 
-    const result = RoomSchema.safeParse(req.body)
+    const result = CreateRoomSchema.safeParse(req.body)
 
     if (!result.success) {
         return res.status(400).json({
@@ -17,21 +18,89 @@ roomRouter.post("/create", Auth(),  async (req, res) => {
         })
     } 
 
-    const { slug } = req.body
+    const { slug, password } = req.body
+
+    const hashedPassword = await bcrypt.hash(password, 10);
 
     try {
-        await prisma.room.create({
+        const room = await prisma.room.create({
             data: {
                 slug: slug,
+                password: hashedPassword,
                 adminId: (req as any).userId
             }
+        })
+        res.status(201).json({
+            message: "Room is created.",
+            room
         })
     }
     catch(err) {
         return res.status(500).json({ message: "Something went wrong either DB not connected or Room slug already exist.."})
     }
+})
 
-    res.status(201).json({
-        message: "Room is created."
-    })
+roomRouter.post("/join", Auth(), async (req, res) => {
+    const result = JoinRoomSchema.safeParse(req.body)
+    
+    if (!result.success) {
+        return res.status(400).json({
+            message: "Incorrect input format",
+            errors: result.error.issues[0]
+        })
+    }
+
+    const { slug, password } = req.body
+
+    try {
+        const room = await prisma.room.findUnique({
+            where: { slug }
+        })
+
+        if (!room) {
+            return res.status(404).json({ message: "Room not found" })
+        }
+
+        const passwordMatch = await bcrypt.compare(password, room.password)
+
+        if (!passwordMatch) {
+            return res.status(403).json({ message: "Incorrect password" })
+        }
+
+        res.json({
+            message: "Joined successfully",
+            room
+        })
+    } catch (err) {
+        res.status(500).json({ message: "Something went wrong while joining room" })
+    }
+})
+
+roomRouter.get("/rooms", Auth(), async (req, res) => {
+    try {
+        const rooms = await prisma.room.findMany({
+            orderBy: { createAt: "desc" },
+            include: {
+                admin: {
+                    select: { name: true, email: true }
+                }
+            }
+        })
+        res.json({ rooms })
+    } catch (err) {
+        res.status(500).json({ message: "Failed to fetch rooms" })
+    }
+})
+
+roomRouter.get("/:roomId/elements", Auth(), async (req, res) => {
+    try {
+        const roomId = parseInt(req.params.roomId)
+        const elements = await prisma.drawElement.findMany({
+            where: { roomId },
+            orderBy: { createdAt: "asc" }
+        })
+        res.json({ elements })
+    } catch (err) {
+        res.status(500).json({ message: "Failed to fetch elements" })
+    }
 })
