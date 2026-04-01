@@ -70,7 +70,7 @@ wss.on("connection", (socket, request) => {
                         return
                     }
 
-                    
+                    // Verify room password
                     try {
                         const room = await prisma.room.findUnique({
                             where: { id: parseInt(roomId) }
@@ -92,7 +92,7 @@ wss.on("connection", (socket, request) => {
                         return
                     }
                     
-                    
+                    // Leave previous room if any
                     if (meta.roomId) {
                         const prevRoom = rooms.get(meta.roomId)
                         if (prevRoom) {
@@ -101,14 +101,14 @@ wss.on("connection", (socket, request) => {
                         }
                     }
 
-                    
+                    // Join new room
                     meta.roomId = roomId
                     if (!rooms.has(roomId)) {
                         rooms.set(roomId, new Set())
                     }
                     rooms.get(roomId)!.add(socket)
 
-                    
+                    // Send existing elements
                     try {
                         const elements = await prisma.drawElement.findMany({
                             where: { roomId: parseInt(roomId) },
@@ -131,13 +131,13 @@ wss.on("connection", (socket, request) => {
                     if (!meta.roomId) return
                     const elementData = message.payload.element
 
-                    
+                    // Always broadcast to other clients first (real-time sync)
                     broadcastToRoom(meta.roomId, {
                         type: "element_created",
                         payload: { element: elementData }
                     }, socket)
 
-                    
+                    // Then persist to DB async (best-effort)
                     try {
                         await prisma.drawElement.create({
                             data: {
@@ -162,13 +162,13 @@ wss.on("connection", (socket, request) => {
                     if (!meta.roomId) return
                     const { elementId, updates } = message.payload
 
-                    
+                    // Broadcast first
                     broadcastToRoom(meta.roomId, {
                         type: "element_updated",
                         payload: { element: { id: elementId, ...updates } }
                     }, socket)
 
-                    
+                    // Persist async
                     try {
                         await prisma.drawElement.update({
                             where: { id: elementId },
@@ -191,13 +191,13 @@ wss.on("connection", (socket, request) => {
                     if (!meta.roomId) return
                     const { elementId } = message.payload
 
-                    
+                    // Broadcast first
                     broadcastToRoom(meta.roomId, {
                         type: "element_deleted",
                         payload: { elementId }
                     }, socket)
 
-                    
+                    // Persist async 
                     try {
                         await prisma.drawElement.delete({
                             where: { id: elementId }

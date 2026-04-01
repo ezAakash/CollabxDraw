@@ -1,0 +1,56 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+// Get a free hosted Postgres database in seconds: `npx create-db`
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+model User { 
+  id        String       @id @default(uuid()) 
+  email     String           @unique
+  name      String?
+  password  String
+  photo     String?
+  rooms     Room[]
+  chats     Chat[]
+} 
+
+model Room {
+  id        Int            @id @default(autoincrement())
+  slug      String         @unique
+  password  String
+  createAt  DateTime       @default(now())
+  adminId   String        
+  admin     User           @relation(fields: [adminId], references: [id])
+  chats     Chat[]
+  elements  DrawElement[]
+}
+
+model Chat {
+  id        Int          @id @default(autoincrement())
+  roomId    Int
+  message   String
+  userId    String
+  room      Room             @relation(fields: [roomId], references: [id])
+  user      User             @relation(fields: [userId], references: [id])
+}
+
+model DrawElement {
+  id          String   @id @default(uuid())
+  roomId      Int
+  type        String
+  points      Json
+  strokeColor String   @default("#ffffff")
+  fillColor   String   @default("transparent")
+  strokeWidth Int      @default(2)
+  opacity     Float    @default(1.0)
+  text        String?
+  createdAt   DateTime @default(now())
+  room        Room     @relation(fields: [roomId], references: [id])
+}

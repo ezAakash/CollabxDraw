@@ -1,5 +1,5 @@
 {
-  "name": "CollabxDraw",
+  "name": "collabxdraw",
   "private": true,
   "scripts": {
     "build": "turbo run build",
