@@ -31,7 +31,6 @@ userRouter.post("/signup", async (req, res) => {
                 password: hashedPassword
             }
         })
-        // add the entry into the DB
     }catch(err: unknown) {
         if (err) {
             return res.status(403).json({message : "Hey, user already exist in DB, please try to logIn"})

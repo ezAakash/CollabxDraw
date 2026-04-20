@@ -65,7 +65,6 @@ export function useWebSocket({
     };
 
     ws.onclose = () => {
-      // Reconnect after 3 seconds
       reconnectTimeoutRef.current = window.setTimeout(() => {
         connect();
       }, 3000);

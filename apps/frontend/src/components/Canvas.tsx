@@ -43,16 +43,16 @@ export default function Canvas({
     canvas.height = canvas.clientHeight * dpr;
     ctx.scale(dpr, dpr);
 
-    // Clear with background
+    
     ctx.fillStyle = CANVAS_BG;
     ctx.fillRect(0, 0, canvas.clientWidth, canvas.clientHeight);
 
-    // Apply viewport transform
+    
     ctx.save();
     ctx.translate(viewport.offsetX, viewport.offsetY);
     ctx.scale(viewport.scale, viewport.scale);
 
-    // Draw grid dots
+    
     const gridSize = 20;
     const startX =
       Math.floor(-viewport.offsetX / viewport.scale / gridSize) * gridSize;
@@ -76,17 +76,17 @@ export default function Canvas({
       }
     }
 
-    // Draw all elements
+    
     for (const el of elements) {
       drawElement(ctx, el);
     }
 
-    // Draw current element
+    
     if (currentElement) {
       drawElement(ctx, currentElement);
     }
 
-    // Selection box
+    
     if (selectedElementId) {
       const selected = elements.find((e) => e.id === selectedElementId);
       if (selected && selected.points.length > 0) {

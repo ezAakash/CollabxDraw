@@ -25,7 +25,7 @@ function authenticate(token: string): string | null {
 
 function broadcastToRoom(roomId: string, message: object, excludeSocket?: WebSocket) {
     const socketsInRoom = rooms.get(roomId)
-    if (!socketsInRoom) return
+    if (!socketsInRoom) return;
 
     const data = JSON.stringify(message)
     socketsInRoom.forEach((socket) => {

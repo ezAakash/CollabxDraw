@@ -1,0 +1,20 @@
+FROM node:20-alpine
+
+RUN npm install -g pnpm
+
+WORKDIR /app
+
+COPY pnpm-lock.yaml package.json pnpm-workspace.yaml turbo.json ./
+
+COPY apps/ws-backend ./apps/ws-backend
+COPY packages ./packages
+
+RUN pnpm install --frozen-lockfile
+
+RUN pnpm run generate:db
+
+RUN pnpm --filter ws-backend build
+
+EXPOSE 8081
+
+CMD ["pnpm", "--filter", "ws-backend", "start"]

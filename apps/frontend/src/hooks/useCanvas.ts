@@ -20,7 +20,7 @@ export function useCanvas() {
   const panStart = useRef<Point | null>(null);
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
 
-  // Convert screen coords to canvas coords
+  
   const screenToCanvas = useCallback(
     (screenX: number, screenY: number): Point => {
       return {
@@ -31,11 +31,11 @@ export function useCanvas() {
     [viewport]
   );
 
-  // Generate unique ID
+ 
   const generateId = () =>
     `el_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
 
-  // Render canvas
+
   const renderCanvas = useCallback(
     (canvas: HTMLCanvasElement) => {
       const ctx = canvas.getContext('2d');
@@ -46,11 +46,11 @@ export function useCanvas() {
       canvas.height = canvas.clientHeight * dpr;
       ctx.scale(dpr, dpr);
 
-      // Clear with background
+      
       ctx.fillStyle = CANVAS_BG;
       ctx.fillRect(0, 0, canvas.clientWidth, canvas.clientHeight);
 
-      // Draw grid dots
+      
       ctx.save();
       ctx.translate(viewport.offsetX, viewport.offsetY);
       ctx.scale(viewport.scale, viewport.scale);
@@ -78,17 +78,17 @@ export function useCanvas() {
         }
       }
 
-      // Draw all elements
+   
       for (const el of elements) {
         drawElement(ctx, el);
       }
 
-      // Draw current element being drawn
+      
       if (currentElement.current) {
         drawElement(ctx, currentElement.current);
       }
 
-      // Draw selection box around selected element
+   
       if (selectedElementId) {
         const selected = elements.find((e) => e.id === selectedElementId);
         if (selected) {
@@ -132,7 +132,7 @@ export function useCanvas() {
     );
     ctx.setLineDash([]);
 
-    // Corner handles
+   
     const handleSize = 6;
     ctx.fillStyle = '#6c5ce7';
     const corners = [
@@ -152,7 +152,7 @@ export function useCanvas() {
     ctx.restore();
   };
 
-  // Pointer handlers
+  
   const onPointerDown = useCallback(
     (e: React.PointerEvent<HTMLCanvasElement>) => {
       const canvas = e.currentTarget;
@@ -168,7 +168,7 @@ export function useCanvas() {
       }
 
       if (activeTool === 'select') {
-        // Hit test for selection
+       
         let found = false;
         for (let i = elements.length - 1; i >= 0; i--) {
           if (hitTest(canvasPoint, elements[i])) {
@@ -189,7 +189,7 @@ export function useCanvas() {
           if (hitTest(canvasPoint, elements[i])) {
             const id = elements[i].id;
             setElements((prev) => prev.filter((el) => el.id !== id));
-            return id; // Return id for WS delete
+            return id; 
           }
         }
         return;
@@ -214,7 +214,7 @@ export function useCanvas() {
         return;
       }
 
-      // Start drawing a shape / pencil
+      
       isDrawing.current = true;
       const newElement: DrawElement = {
         id: generateId(),
@@ -239,7 +239,6 @@ export function useCanvas() {
       const screenY = e.clientY - rect.top;
       const canvasPoint = screenToCanvas(screenX, screenY);
 
-      // Pan
       if (panStart.current) {
         const dx = e.clientX - panStart.current.x;
         const dy = e.clientY - panStart.current.y;
@@ -252,7 +251,7 @@ export function useCanvas() {
         return;
       }
 
-      // Drag selected element
+      
       if (dragStart.current && selectedElementId) {
         const dx = canvasPoint.x - dragStart.current.x;
         const dy = canvasPoint.y - dragStart.current.y;
@@ -276,20 +275,18 @@ export function useCanvas() {
       if (!isDrawing.current || !currentElement.current) return;
 
       if (currentElement.current.type === 'pencil') {
-        // Append point for freehand
         currentElement.current = {
           ...currentElement.current,
           points: [...currentElement.current.points, canvasPoint],
         };
       } else {
-        // Update end point for shapes
+        
         currentElement.current = {
           ...currentElement.current,
           points: [currentElement.current.points[0], canvasPoint],
         };
       }
 
-      // Trigger re-render
       if (canvasRef.current) {
         renderCanvas(canvasRef.current);
       }
@@ -310,7 +307,7 @@ export function useCanvas() {
 
       if (dragStart.current) {
         dragStart.current = null;
-        // Return the updated element for WS sync
+        // return the updated element for WS sync
         const updatedEl = elements.find((e) => e.id === selectedElementId);
         return updatedEl;
       }
@@ -321,7 +318,7 @@ export function useCanvas() {
       const finishedElement = { ...currentElement.current };
       currentElement.current = null;
 
-      // Only add if the shape has meaningful size
+      
       if (finishedElement.points.length >= 2 || finishedElement.type === 'pencil') {
         setElements((prev) => [...prev, finishedElement]);
         return finishedElement;

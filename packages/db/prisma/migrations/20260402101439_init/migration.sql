@@ -13,6 +13,7 @@ CREATE TABLE "User" (
 CREATE TABLE "Room" (
     "id" SERIAL NOT NULL,
     "slug" TEXT NOT NULL,
+    "password" TEXT NOT NULL,
     "createAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "adminId" TEXT NOT NULL,
 
@@ -20,13 +21,19 @@ CREATE TABLE "Room" (
 );
 
 -- CreateTable
-CREATE TABLE "Chat" (
-    "id" SERIAL NOT NULL,
+CREATE TABLE "DrawElement" (
+    "id" TEXT NOT NULL,
     "roomId" INTEGER NOT NULL,
-    "message" TEXT NOT NULL,
-    "userId" TEXT NOT NULL,
+    "type" TEXT NOT NULL,
+    "points" JSONB NOT NULL,
+    "strokeColor" TEXT NOT NULL DEFAULT '#ffffff',
+    "fillColor" TEXT NOT NULL DEFAULT 'transparent',
+    "strokeWidth" INTEGER NOT NULL DEFAULT 2,
+    "opacity" DOUBLE PRECISION NOT NULL DEFAULT 1.0,
+    "text" TEXT,
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
 
-    CONSTRAINT "Chat_pkey" PRIMARY KEY ("id")
+    CONSTRAINT "DrawElement_pkey" PRIMARY KEY ("id")
 );
 
 -- CreateIndex
@@ -39,7 +46,4 @@ CREATE UNIQUE INDEX "Room_slug_key" ON "Room"("slug");
 ALTER TABLE "Room" ADD CONSTRAINT "Room_adminId_fkey" FOREIGN KEY ("adminId") REFERENCES "User"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE "Chat" ADD CONSTRAINT "Chat_roomId_fkey" FOREIGN KEY ("roomId") REFERENCES "Room"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
-
--- AddForeignKey
-ALTER TABLE "Chat" ADD CONSTRAINT "Chat_userId_fkey" FOREIGN KEY ("userId") REFERENCES "User"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+ALTER TABLE "DrawElement" ADD CONSTRAINT "DrawElement_roomId_fkey" FOREIGN KEY ("roomId") REFERENCES "Room"("id") ON DELETE RESTRICT ON UPDATE CASCADE;

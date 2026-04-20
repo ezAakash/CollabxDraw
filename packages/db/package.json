@@ -8,7 +8,7 @@
     "./prisma": "./src/prismaclient.ts"
   },
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "build": "tsc"
   },
   "devDependencies": {
     "@repo/typescript-config": "workspace:*",
