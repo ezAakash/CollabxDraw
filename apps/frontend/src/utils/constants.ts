@@ -51,5 +51,5 @@ export const DEFAULT_STYLE: StyleOptions = {
 
 export const CANVAS_BG = '#1a1a2e';
 
-export const API_BASE = '/api';
-export const WS_URL = 'ws://localhost:8080';
+export const API_BASE = import.meta.env.VITE_API_URL;
+export const WS_URL = import.meta.env.VITE_WS_URL;
