@@ -4,11 +4,11 @@
   "description": "",
   "main": "index.js",
   "exports": {
-    "./config": "./src/config.ts",
-    "./zod_schema": "./src/zod_schema.ts"
+    "./config": "./dist/config.js",
+    "./zod_schema": "./dist/zod_schema.js"
   },
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "build": "tsc -b"
   },
   "dependencies": {
     "@types/node": "^22.15.3",

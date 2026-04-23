@@ -1,25 +1,46 @@
-FROM node:20-alpine
+# -------- Base --------
+FROM node:20-alpine AS base
 
 RUN npm install -g pnpm
 
 WORKDIR /app
 
+# -------- Builder --------
+FROM base AS builder
+
+# Copy only necessary files first (better caching)
 COPY pnpm-lock.yaml package.json pnpm-workspace.yaml turbo.json ./
 
-
-COPY apps/http-backend ./apps/http-backend
+# Copy source
+COPY apps ./apps
 COPY packages ./packages
 
-
+# Install all dependencies
 RUN pnpm install --frozen-lockfile
 
-
+# Generate Prisma client (important)
 RUN pnpm run generate:db
 
+# Build shared packages
+RUN pnpm --filter @repo/backend-common build
+RUN pnpm --filter @repo/db build
 
+# Build service
 RUN pnpm --filter http-backend build
 
+# 🔥 Create minimal production bundle
+RUN pnpm deploy --filter=http-backend --prod /prod
 
-EXPOSE 8080
+# -------- Runtime --------
+FROM node:20-alpine AS runner
 
-CMD ["pnpm", "--filter", "http-backend", "start"]
+WORKDIR /app
+
+ENV NODE_ENV=production
+
+# Copy ONLY the pruned production app
+COPY --from=builder /prod ./
+
+EXPOSE 3000
+
+CMD ["node", "/app/dist/index.js"]

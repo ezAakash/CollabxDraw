@@ -3,9 +3,12 @@
   "version": "1.0.0",
   "description": "",
   "main": "index.js",
-  "type": "module",
+  "files": [
+    "dist",
+    "generated"
+  ],
   "exports": {
-    "./prisma": "./src/prismaclient.ts"
+    "./prisma": "./dist/prismaclient.js"
   },
   "scripts": {
     "build": "tsc"

@@ -1,12 +1,7 @@
 import express from "express"
 import cors from "cors"
-import dotenv from "dotenv"
 import { userRouter } from "./router/users"
 import { roomRouter } from "./router/rooms"
-
-
-dotenv.config()
-
 
 const app = express()
 
