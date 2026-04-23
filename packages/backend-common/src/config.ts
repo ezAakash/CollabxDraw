@@ -1,1 +1,1 @@
-export const SECRET = process.env.JWT_SECRET
+export const SECRET = process.env.JWT_SECRET as string

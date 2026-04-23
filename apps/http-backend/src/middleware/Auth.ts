@@ -17,12 +17,10 @@ export default function Auth() {
             .replace(/^"(.*)"$/, "$1");
         
         try {
-            const response = jwt.verify(token, SECRET) as { id: String }
-        
-            if (!response) {
-                return res.status(403).json({
-                    message: "Incorrect Credentials"
-                })
+            const response = jwt.verify(token, SECRET);
+
+            if (typeof response === "string" || !response.id) {
+                return res.status(403).json({ message: "Invalid Credentials" });
             }
 
             req.userId = response.id
