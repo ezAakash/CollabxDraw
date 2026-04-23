@@ -56,9 +56,9 @@ jobs:
           username: ${{ secrets.EC2_USER }}
           key: ${{ secrets.EC2_SSH_KEY }}
           script: |
-                sudo docker pull ${{ secrets.DOCKERHUB_USERNAME }}/collabxdraw-http:latest && \
-                sudo docker pull ${{ secrets.DOCKERHUB_USERNAME }}/collabxdraw-ws:latest && \
+                sudo docker pull ${{ vars.DOCKERHUB_USERNAME }}/collabxdraw-http:latest && \
+                sudo docker pull ${{ vars.DOCKERHUB_USERNAME }}/collabxdraw-ws:latest && \
                 sudo docker stop http-backend ws-backend || true && \
                 sudo docker rm http-backend ws-backend || true && \
-                sudo docker run -d --name http-backend --restart always -p 3000:3000 --memory=250m --cpus=0.5 -e DATABASE_URL=${{ secrets.DATABASE_URL }} -e JWT_SECRET=${{ secrets.JWT_SECRET }} ${{ secrets.DOCKERHUB_USERNAME }}/collabxdraw-http:latest && \
-                sudo docker run -d --name ws-backend --restart always -p 8080:8080 --memory=250m --cpus=0.5 -e DATABASE_URL=${{ secrets.DATABASE_URL }} -e JWT_SECRET=${{ secrets.JWT_SECRET }} ${{ secrets.DOCKERHUB_USERNAME }}/collabxdraw-ws:latest
+                sudo docker run -d --name http-backend --restart always -p 3000:3000 --memory=250m --cpus=0.5 -e DATABASE_URL=${{ secrets.DATABASE_URL }} -e JWT_SECRET=${{ secrets.JWT_SECRET }} ${{ vars.DOCKERHUB_USERNAME }}/collabxdraw-http:latest && \
+                sudo docker run -d --name ws-backend --restart always -p 8080:8080 --memory=250m --cpus=0.5 -e DATABASE_URL=${{ secrets.DATABASE_URL }} -e JWT_SECRET=${{ secrets.JWT_SECRET }} ${{ vars.DOCKERHUB_USERNAME }}/collabxdraw-ws:latest
