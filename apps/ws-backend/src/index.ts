@@ -16,8 +16,11 @@ const rooms = new Map<string, Set<WebSocket>>();
 
 function authenticate(token: string): string | null {
     try {
-        const payload = jwt.verify(token, SECRET) as { id: string }
-        return payload.id || null
+        const payload = jwt.verify(token, SECRET)
+        if (typeof payload === "string" || !payload.id) {
+            return null
+        }
+        return payload.id
     } catch {
         return null
     }
