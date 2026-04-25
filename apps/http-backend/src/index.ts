@@ -5,7 +5,16 @@ import { roomRouter } from "./router/rooms"
 
 const app = express()
 
-app.use(cors())
+const allowedOrigins = [
+    "https://collabxdraw.vercel.app",
+    "http://localhost:5173",
+];
+
+app.use(cors({
+  origin: allowedOrigins,
+  credentials: true
+}));
+
 app.use(express.json())
 
 app.get("/health", (req, res) => {
