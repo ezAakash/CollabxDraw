@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { getRooms, createRoom, joinRoom } from '../utils/api';
+import { getRooms, createRoom, joinRoom, deleteRoom } from '../utils/api';
 import type { Room } from '../types';
 import Navbar from '../components/Navbar';
 import RoomCard from '../components/RoomCard';
@@ -33,8 +33,8 @@ export default function Dashboard() {
 
   const handleCreate = async () => {
     if (!slug.trim() || slug.length < 4 || !password.trim()) {
-       setError('Slug (min 4 chars) and Password are required');
-       return;
+      setError('Slug (min 4 chars) and Password are required');
+      return;
     }
     setCreating(true);
     setError('');
@@ -59,8 +59,8 @@ export default function Dashboard() {
 
   const handleJoin = async () => {
     if (!slug.trim() || !password.trim()) {
-       setError('Slug and Password are required to join');
-       return;
+      setError('Slug and Password are required to join');
+      return;
     }
     setJoining(true);
     setError('');
@@ -79,15 +79,28 @@ export default function Dashboard() {
     }
   };
 
+  const handleDelete = async (roomId: number) => {
+    try {
+      const data = await deleteRoom(roomId);
+      if (data.message?.includes('deleted')) {
+        setRooms((prev) => prev.filter((r) => r.id !== roomId));
+      } else {
+        setError(data.message || 'Failed to delete room');
+      }
+    } catch {
+      setError('Failed to delete room');
+    }
+  };
+
   // For RoomCard clicking — requires a password prompt if they haven't entered it
   const handleRoomCardClick = (roomSlug: string) => {
     if (slug === roomSlug && password) {
-       handleJoin();
+      handleJoin();
     } else {
-       setSlug(roomSlug);
-       setPassword('');
-       setError(`Entering room "${roomSlug}". Please enter its password and click Join.`);
-       document.getElementById('room-password-input')?.focus();
+      setSlug(roomSlug);
+      setPassword('');
+      setError(`Entering room "${roomSlug}". Please enter its password and click Open.`);
+      document.getElementById('room-password-input')?.focus();
     }
   };
 
@@ -100,7 +113,7 @@ export default function Dashboard() {
           <div>
             <h1 className="dashboard-title">Your Rooms</h1>
             <p className="dashboard-subtitle">
-              Create or join a protected room to start drawing
+              Manage your rooms or join someone else's room using their slug and password
             </p>
           </div>
         </header>
@@ -110,7 +123,7 @@ export default function Dashboard() {
         {/* Unified Room Form */}
         <div className="dashboard-actions">
           <div className="action-form">
-            <h3 className="action-label">Enter Room Access Details</h3>
+            <h3 className="action-label">Create a new room or join an existing one</h3>
             <div className="action-row">
               <input
                 type="text"
@@ -162,17 +175,18 @@ export default function Dashboard() {
           <div className="dashboard-empty">
             <div className="empty-icon">◇</div>
             <h3>No rooms yet</h3>
-            <p>Create your first room to start drawing!</p>
+            <p>Create your first room above, or join someone else's room using their slug and password.</p>
           </div>
         ) : (
           <>
-            <h2 className="rooms-heading">Available Rooms</h2>
+            <h2 className="rooms-heading">Your Rooms</h2>
             <div className="rooms-grid" id="rooms-grid">
               {rooms.map((room) => (
                 <RoomCard
                   key={room.id}
                   room={room}
                   onClick={() => handleRoomCardClick(room.slug)}
+                  onDelete={handleDelete}
                 />
               ))}
             </div>

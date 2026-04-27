@@ -13,7 +13,7 @@ export default function Navbar() {
 
   return (
     <nav className="navbar" id="main-navbar">
-      <Link to="/" className="navbar-brand">
+      <Link to={isAuthenticated ? "/dashboard" : "/"} className="navbar-brand">
         <span className="brand-icon">◇</span>
         <span className="brand-text">CollabxDraw</span>
       </Link>

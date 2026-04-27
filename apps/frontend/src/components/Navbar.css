@@ -32,10 +32,18 @@
 }
 
 .brand-text {
-  background: linear-gradient(135deg, var(--text-primary), var(--accent));
+  background: linear-gradient(270deg, #ffffff, var(--accent), #6251d2);
+  background-size: 200% 200%;
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
   background-clip: text;
+  animation: brandGlow 8s ease infinite;
+}
+
+@keyframes brandGlow {
+  0% { background-position: 0% 50%; }
+  50% { background-position: 100% 50%; }
+  100% { background-position: 0% 50%; }
 }
 
 .navbar-links {

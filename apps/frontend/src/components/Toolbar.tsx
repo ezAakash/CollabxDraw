@@ -7,14 +7,19 @@ interface ToolbarProps {
   onToolChange: (tool: Tool) => void;
 }
 
+// will check later can we do optimization in this.
+
 export default function Toolbar({ activeTool, onToolChange }: ToolbarProps) {
+
+  const handleClick = (tool: Tool) => () => onToolChange(tool);
+  
   return (
     <div className="toolbar" id="drawing-toolbar">
       {TOOLS.map((t) => (
         <button
           key={t.tool}
           className={`toolbar-btn ${activeTool === t.tool ? 'active' : ''}`}
-          onClick={() => onToolChange(t.tool)}
+          onClick={handleClick(t.tool)}
           title={`${t.label} (${t.shortcut})`}
           id={`tool-${t.tool}`}
         >

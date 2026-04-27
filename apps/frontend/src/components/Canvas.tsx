@@ -1,14 +1,15 @@
-import { useEffect, useRef, useCallback } from 'react';
-import type { DrawElement, Tool, Viewport } from '../types';
-import { drawElement } from '../utils/shapes';
+import { useEffect, useCallback, forwardRef, useImperativeHandle } from 'react';
+import type { DrawElement, Tool, Point, StyleOptions } from '../types';
+import { drawElement as renderElement } from '../utils/shapes';
 import { CANVAS_BG } from '../utils/constants';
-import './Canvas.css';
 
 interface CanvasProps {
   elements: DrawElement[];
-  viewport: Viewport;
-  currentElement: DrawElement | null;
-  selectedElementId: string | null;
+  viewport: { offsetX: number; offsetY: number; scale: number };
+  currentEl: React.RefObject<DrawElement | null>;
+  selectedId: string | null;
+  editingText: { pt: Point; text: string } | null;
+  style: StyleOptions;
   activeTool: Tool;
   onPointerDown: (e: React.PointerEvent<HTMLCanvasElement>) => void;
   onPointerMove: (e: React.PointerEvent<HTMLCanvasElement>) => void;
@@ -17,24 +18,27 @@ interface CanvasProps {
   canvasRef: React.RefObject<HTMLCanvasElement | null>;
 }
 
-export default function Canvas({
+export interface CanvasHandle {
+  render: () => void;
+}
+
+const Canvas = forwardRef<CanvasHandle, CanvasProps>(({
   elements,
   viewport,
-  currentElement,
-  selectedElementId,
+  currentEl,
+  selectedId,
+  editingText,
+  style,
   activeTool,
   onPointerDown,
   onPointerMove,
   onPointerUp,
   onWheel,
-  canvasRef,
-}: CanvasProps) {
-  const containerRef = useRef<HTMLDivElement>(null);
-
+  canvasRef
+}, ref) => {
   const render = useCallback(() => {
     const canvas = canvasRef.current;
     if (!canvas) return;
-
     const ctx = canvas.getContext('2d');
     if (!ctx) return;
 
@@ -43,55 +47,54 @@ export default function Canvas({
     canvas.height = canvas.clientHeight * dpr;
     ctx.scale(dpr, dpr);
 
-    
     ctx.fillStyle = CANVAS_BG;
     ctx.fillRect(0, 0, canvas.clientWidth, canvas.clientHeight);
 
-    
     ctx.save();
     ctx.translate(viewport.offsetX, viewport.offsetY);
     ctx.scale(viewport.scale, viewport.scale);
 
-    
-    const gridSize = 20;
-    const startX =
-      Math.floor(-viewport.offsetX / viewport.scale / gridSize) * gridSize;
-    const startY =
-      Math.floor(-viewport.offsetY / viewport.scale / gridSize) * gridSize;
-    const endX =
-      Math.ceil(
-        (canvas.clientWidth - viewport.offsetX) / viewport.scale / gridSize
-      ) * gridSize;
-    const endY =
-      Math.ceil(
-        (canvas.clientHeight - viewport.offsetY) / viewport.scale / gridSize
-      ) * gridSize;
-
+    // Grid dots
+    const gs = 20;
+    const sx = Math.floor(-viewport.offsetX / viewport.scale / gs) * gs;
+    const sy = Math.floor(-viewport.offsetY / viewport.scale / gs) * gs;
+    const ex = Math.ceil((canvas.clientWidth - viewport.offsetX) / viewport.scale / gs) * gs;
+    const ey = Math.ceil((canvas.clientHeight - viewport.offsetY) / viewport.scale / gs) * gs;
     ctx.fillStyle = 'rgba(255,255,255,0.06)';
-    for (let x = startX; x <= endX; x += gridSize) {
-      for (let y = startY; y <= endY; y += gridSize) {
+    for (let x = sx; x <= ex; x += gs) {
+      for (let y = sy; y <= ey; y += gs) {
         ctx.beginPath();
         ctx.arc(x, y, 1, 0, Math.PI * 2);
         ctx.fill();
       }
     }
 
-    
+    // Elements
     for (const el of elements) {
-      drawElement(ctx, el);
+      renderElement(ctx, el);
+    }
+    if (currentEl.current) {
+      renderElement(ctx, currentEl.current);
+    }
+    if (editingText && editingText.text) {
+      renderElement(ctx, {
+        id: 'temp_text',
+        type: 'text',
+        points: [editingText.pt],
+        strokeColor: style.strokeColor,
+        fillColor: 'transparent',
+        strokeWidth: style.strokeWidth,
+        opacity: style.opacity,
+        text: editingText.text,
+      });
     }
 
-    
-    if (currentElement) {
-      drawElement(ctx, currentElement);
-    }
-
-    
-    if (selectedElementId) {
-      const selected = elements.find((e) => e.id === selectedElementId);
-      if (selected && selected.points.length > 0) {
+    // Selection
+    if (selectedId) {
+      const sel = elements.find((e) => e.id === selectedId);
+      if (sel && sel.points.length > 0) {
         let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
-        for (const p of selected.points) {
+        for (const p of sel.points) {
           minX = Math.min(minX, p.x);
           minY = Math.min(minY, p.y);
           maxX = Math.max(maxX, p.x);
@@ -103,7 +106,6 @@ export default function Canvas({
         ctx.setLineDash([6, 4]);
         ctx.strokeRect(minX - pad, minY - pad, maxX - minX + pad * 2, maxY - minY + pad * 2);
         ctx.setLineDash([]);
-
         const hs = 6;
         ctx.fillStyle = '#6c5ce7';
         for (const c of [
@@ -118,45 +120,39 @@ export default function Canvas({
     }
 
     ctx.restore();
-  }, [elements, viewport, currentElement, selectedElementId, canvasRef]);
+  }, [elements, viewport, selectedId, editingText, style, currentEl, canvasRef]);
 
-  useEffect(() => {
-    render();
-  }, [render]);
+  useImperativeHandle(ref, () => ({ render }));
 
+  useEffect(() => { render(); }, [render]);
   useEffect(() => {
-    const handleResize = () => render();
-    window.addEventListener('resize', handleResize);
-    return () => window.removeEventListener('resize', handleResize);
+    const h = () => render();
+    window.addEventListener('resize', h);
+    return () => window.removeEventListener('resize', h);
   }, [render]);
 
   const getCursor = () => {
     switch (activeTool) {
-      case 'hand':
-        return 'grab';
-      case 'select':
-        return 'default';
-      case 'text':
-        return 'text';
-      case 'eraser':
-        return 'not-allowed';
-      default:
-        return 'crosshair';
+      case 'hand': return 'grab';
+      case 'select': return 'default';
+      case 'text': return 'text';
+      case 'eraser': return `url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10" fill="rgba(255,255,255,0.2)" stroke="white" stroke-width="1.5"/></svg>') 12 12, cell`;
+      default: return 'crosshair';
     }
   };
 
   return (
-    <div className="canvas-container" ref={containerRef}>
-      <canvas
-        ref={canvasRef}
-        className="drawing-canvas"
-        id="main-canvas"
-        style={{ cursor: getCursor() }}
-        onPointerDown={onPointerDown}
-        onPointerMove={onPointerMove}
-        onPointerUp={onPointerUp}
-        onWheel={onWheel}
-      />
-    </div>
+    <canvas
+      ref={canvasRef}
+      className="main-canvas"
+      id="main-canvas"
+      style={{ cursor: getCursor() }}
+      onPointerDown={onPointerDown}
+      onPointerMove={onPointerMove}
+      onPointerUp={onPointerUp}
+      onWheel={onWheel}
+    />
   );
-}
+});
+
+export default Canvas;

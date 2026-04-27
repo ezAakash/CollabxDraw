@@ -11,7 +11,7 @@ export const TOOLS: ToolDefinition[] = [
   { tool: 'select', label: 'Select', shortcut: 'V', icon: '↖' },
   { tool: 'rectangle', label: 'Rectangle', shortcut: 'R', icon: '□' },
   { tool: 'ellipse', label: 'Ellipse', shortcut: 'O', icon: '○' },
-  { tool: 'diamond', label: 'Diamond', shortcut: 'D', icon: '◇' },
+  { tool: 'diamond', label: 'Diamond', shortcut: 'D', icon: '♦' },
   { tool: 'line', label: 'Line', shortcut: 'L', icon: '╱' },
   { tool: 'arrow', label: 'Arrow', shortcut: 'A', icon: '→' },
   { tool: 'pencil', label: 'Pencil', shortcut: 'P', icon: '✏' },
@@ -52,4 +52,4 @@ export const DEFAULT_STYLE: StyleOptions = {
 export const CANVAS_BG = '#1a1a2e';
 
 export const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:3000';
-export const WS_URL = import.meta.env.VITE_WS_URL || 'http://localhost:8080';
+export const WS_URL = import.meta.env.VITE_WS_URL || 'ws://localhost:8080';

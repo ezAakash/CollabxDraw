@@ -8,19 +8,20 @@ const wss = new WebSocketServer({ port: 8080 })
 
 interface SocketMeta {
     userId: string;
+    userName: string;
     roomId: string | null;
 }
 
 const socketMeta = new WeakMap<WebSocket, SocketMeta>();
 const rooms = new Map<string, Set<WebSocket>>();
 
-function authenticate(token: string): string | null {
+function authenticate(token: string): { userId: string } | null {
     try {
         const payload = jwt.verify(token, SECRET)
         if (typeof payload === "string" || !payload.id) {
             return null
         }
-        return payload.id
+        return { userId: payload.id }
     } catch {
         return null
     }
@@ -38,6 +39,31 @@ function broadcastToRoom(roomId: string, message: object, excludeSocket?: WebSoc
     })
 }
 
+function broadcastParticipants(roomId: string) {
+    const socketsInRoom = rooms.get(roomId)
+    if (!socketsInRoom) return;
+
+    const uniqueNames = new Set<string>()
+    socketsInRoom.forEach((socket) => {
+        const meta = socketMeta.get(socket)
+        if (meta && meta.userName) {
+            uniqueNames.add(meta.userName)
+        }
+    })
+    const participants = Array.from(uniqueNames)
+
+    const msg = JSON.stringify({
+        type: "participant_update",
+        payload: { participants, count: participants.length }
+    })
+
+    socketsInRoom.forEach((socket) => {
+        if (socket.readyState === WebSocket.OPEN) {
+            socket.send(msg)
+        }
+    })
+}
+
 wss.on("connection", (socket, request) => {
     const url = request.url;
     if (!url) {
@@ -47,20 +73,33 @@ wss.on("connection", (socket, request) => {
 
     const queryParams = new URLSearchParams(url.split('?')[1])
     const token = queryParams.get('token') || ""
-    const userId = authenticate(token)
+    const auth = authenticate(token)
 
-    if (!userId) {
+    if (!auth) {
         socket.send(JSON.stringify({ type: "error", payload: { message: "Authentication failed" } }))
         socket.close()
         return
     }
 
-    socketMeta.set(socket, { userId, roomId: null })
+    
+    const meta: SocketMeta = { userId: auth.userId, userName: "Anonymous", roomId: null }
+    socketMeta.set(socket, meta)
+
+
+    prisma.user.findUnique({ where: { id: auth.userId }, select: { name: true } })
+        .then(user => {
+            if (user?.name) {
+                meta.userName = user.name;
+                if (meta.roomId) {
+                    broadcastParticipants(meta.roomId)
+                }
+            }
+        })
+        .catch(() => {})
 
     socket.on("message", async (rawMessage) => {
         try {
             const message = JSON.parse(rawMessage.toString())
-            const meta = socketMeta.get(socket)
             if (!meta) return
 
             switch (message.type) {
@@ -95,23 +134,22 @@ wss.on("connection", (socket, request) => {
                         return
                     }
                     
-                    // Leave previous room if any
+                    
                     if (meta.roomId) {
                         const prevRoom = rooms.get(meta.roomId)
                         if (prevRoom) {
                             prevRoom.delete(socket)
                             if (prevRoom.size === 0) rooms.delete(meta.roomId)
+                            else broadcastParticipants(meta.roomId)
                         }
                     }
 
-                    // Join new room
                     meta.roomId = roomId
                     if (!rooms.has(roomId)) {
                         rooms.set(roomId, new Set())
                     }
                     rooms.get(roomId)!.add(socket)
 
-                    // Send existing elements
                     try {
                         const elements = await prisma.drawElement.findMany({
                             where: { roomId: parseInt(roomId) },
@@ -127,6 +165,9 @@ wss.on("connection", (socket, request) => {
                             payload: { elements: [], roomId }
                         }))
                     }
+
+                    
+                    broadcastParticipants(roomId)
                     break
                 }
 
@@ -134,13 +175,11 @@ wss.on("connection", (socket, request) => {
                     if (!meta.roomId) return
                     const elementData = message.payload.element
 
-                    // Always broadcast to other clients first (real-time sync)
                     broadcastToRoom(meta.roomId, {
                         type: "element_created",
                         payload: { element: elementData }
                     }, socket)
 
-                    // Then persist to DB async (best-effort)
                     try {
                         await prisma.drawElement.create({
                             data: {
@@ -165,13 +204,11 @@ wss.on("connection", (socket, request) => {
                     if (!meta.roomId) return
                     const { elementId, updates } = message.payload
 
-                    // Broadcast first
                     broadcastToRoom(meta.roomId, {
                         type: "element_updated",
                         payload: { element: { id: elementId, ...updates } }
                     }, socket)
 
-                    // Persist async
                     try {
                         await prisma.drawElement.update({
                             where: { id: elementId },
@@ -194,15 +231,13 @@ wss.on("connection", (socket, request) => {
                     if (!meta.roomId) return
                     const { elementId } = message.payload
 
-                    // Broadcast first
                     broadcastToRoom(meta.roomId, {
                         type: "element_deleted",
                         payload: { elementId }
                     }, socket)
 
-                    // Persist async 
                     try {
-                        await prisma.drawElement.delete({
+                        await prisma.drawElement.deleteMany({
                             where: { id: elementId }
                         })
                     } catch (err) {
@@ -220,12 +255,15 @@ wss.on("connection", (socket, request) => {
     })
 
     socket.on("close", () => {
-        const meta = socketMeta.get(socket)
         if (meta?.roomId) {
             const room = rooms.get(meta.roomId)
             if (room) {
                 room.delete(socket)
-                if (room.size === 0) rooms.delete(meta.roomId)
+                if (room.size === 0) {
+                    rooms.delete(meta.roomId)
+                } else {
+                    broadcastParticipants(meta.roomId)
+                }
             }
         }
         socketMeta.delete(socket)

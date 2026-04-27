@@ -1,14 +1,16 @@
 import { useState, useCallback, useRef, useEffect } from 'react';
 import { useParams, useLocation, useNavigate } from 'react-router-dom';
 import type { DrawElement, Tool, Point, StyleOptions } from '../types';
-import { drawElement as renderElement, hitTest } from '../utils/shapes';
-import { DEFAULT_STYLE, CANVAS_BG } from '../utils/constants';
+import { DEFAULT_STYLE } from '../utils/constants';
 import { useAuth } from '../hooks/useAuth';
 import { useWebSocket } from '../hooks/useWebSocket';
 import { useHistory } from '../hooks/useHistory';
 import { useKeyboard } from '../hooks/useKeyboard';
+import { useCanvas } from '../hooks/useCanvas';
 import Toolbar from '../components/Toolbar';
 import StylePanel from '../components/StylePanel';
+import Canvas from '../components/Canvas';
+import type { CanvasHandle } from '../components/Canvas';
 import './CanvasPage.css';
 
 export default function CanvasPage() {
@@ -30,18 +32,21 @@ export default function CanvasPage() {
   const [activeTool, setActiveTool] = useState<Tool>('pencil');
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [style, setStyle] = useState<StyleOptions>({ ...DEFAULT_STYLE });
-  const [viewport, setViewport] = useState({ offsetX: 0, offsetY: 0, scale: 1 });
+  
+  const [editingText, setEditingText] = useState<{ pt: Point; text: string } | null>(null);
+  const textInputRef = useRef<HTMLInputElement>(null);
+
+  // Participants state
+  const [participants, setParticipants] = useState<string[]>([]);
+  const [showParticipants, setShowParticipants] = useState(false);
 
   const canvasRef = useRef<HTMLCanvasElement>(null);
-  const isDrawing = useRef(false);
-  const currentEl = useRef<DrawElement | null>(null);
-  const panStart = useRef<Point | null>(null);
-  const dragStart = useRef<Point | null>(null);
+  const canvasComponentRef = useRef<CanvasHandle>(null);
 
   const { pushState, undo, redo } = useHistory(setElements);
 
+  const generateId = () => `el_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
 
-  // WebSocket
   const { sendDraw, sendDelete } = useWebSocket({
     roomId: roomId || '',
     password,
@@ -58,18 +63,37 @@ export default function CanvasPage() {
     onJoined: useCallback((els: DrawElement[]) => {
       setElements(els);
     }, []),
+    onParticipantUpdate: useCallback((names: string[], _count: number) => {
+      setParticipants(names);
+    }, []),
     onError: useCallback((message: string) => {
       alert(`Room Connection Failed: ${message}`);
       navigate('/dashboard', { replace: true });
     }, [navigate]),
   });
 
-  const [editingText, setEditingText] = useState<{
-    pt: Point;
-    text: string;
-  } | null>(null);
-
-  const textInputRef = useRef<HTMLInputElement>(null);
+  const {
+    viewport,
+    currentEl,
+    handlePointerDown,
+    handlePointerMove,
+    handlePointerUp,
+    handleWheel
+  } = useCanvas({
+    elements,
+    setElements,
+    activeTool,
+    style,
+    sendDraw,
+    sendDelete,
+    pushState,
+    selectedId,
+    setSelectedId,
+    editingText,
+    setEditingText,
+    canvasRef,
+    canvasComponentRef
+  });
 
   const finalizeText = useCallback(() => {
     if (!editingText) return;
@@ -93,265 +117,10 @@ export default function CanvasPage() {
 
   useEffect(() => {
     if (editingText && textInputRef.current) {
-      // Small timeout ensures the DOM has fully rendered the element
-      setTimeout(() => {
-        textInputRef.current?.focus();
-      }, 10);
+      setTimeout(() => textInputRef.current?.focus(), 10);
     }
-  }, [editingText !== null]); // Focus only when editingText changes from null to object
+  }, [editingText !== null]);
 
-  // Helper functions
-  const screenToCanvas = useCallback(
-    (sx: number, sy: number): Point => ({
-      x: (sx - viewport.offsetX) / viewport.scale,
-      y: (sy - viewport.offsetY) / viewport.scale,
-    }),
-    [viewport]
-  );
-
-  const generateId = () =>
-    `el_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
-
-  // ── Render ──────────────────────────────────────
-  const render = useCallback(() => {
-    const canvas = canvasRef.current;
-    if (!canvas) return;
-    const ctx = canvas.getContext('2d');
-    if (!ctx) return;
-
-    const dpr = window.devicePixelRatio || 1;
-    canvas.width = canvas.clientWidth * dpr;
-    canvas.height = canvas.clientHeight * dpr;
-    ctx.scale(dpr, dpr);
-
-    ctx.fillStyle = CANVAS_BG;
-    ctx.fillRect(0, 0, canvas.clientWidth, canvas.clientHeight);
-
-    ctx.save();
-    ctx.translate(viewport.offsetX, viewport.offsetY);
-    ctx.scale(viewport.scale, viewport.scale);
-
-    // Grid dots
-    const gs = 20;
-    const sx = Math.floor(-viewport.offsetX / viewport.scale / gs) * gs;
-    const sy = Math.floor(-viewport.offsetY / viewport.scale / gs) * gs;
-    const ex = Math.ceil((canvas.clientWidth - viewport.offsetX) / viewport.scale / gs) * gs;
-    const ey = Math.ceil((canvas.clientHeight - viewport.offsetY) / viewport.scale / gs) * gs;
-    ctx.fillStyle = 'rgba(255,255,255,0.06)';
-    for (let x = sx; x <= ex; x += gs) {
-      for (let y = sy; y <= ey; y += gs) {
-        ctx.beginPath();
-        ctx.arc(x, y, 1, 0, Math.PI * 2);
-        ctx.fill();
-      }
-    }
-
-    // Elements
-    for (const el of elements) {
-      renderElement(ctx, el);
-    }
-    if (currentEl.current) {
-      renderElement(ctx, currentEl.current);
-    }
-    if (editingText && editingText.text) {
-      renderElement(ctx, {
-        id: 'temp_text',
-        type: 'text',
-        points: [editingText.pt],
-        strokeColor: style.strokeColor,
-        fillColor: 'transparent',
-        strokeWidth: style.strokeWidth,
-        opacity: style.opacity,
-        text: editingText.text,
-      });
-    }
-
-    // Selection
-    if (selectedId) {
-      const sel = elements.find((e) => e.id === selectedId);
-      if (sel && sel.points.length > 0) {
-        let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
-        for (const p of sel.points) {
-          minX = Math.min(minX, p.x);
-          minY = Math.min(minY, p.y);
-          maxX = Math.max(maxX, p.x);
-          maxY = Math.max(maxY, p.y);
-        }
-        const pad = 6;
-        ctx.strokeStyle = '#6c5ce7';
-        ctx.lineWidth = 1.5;
-        ctx.setLineDash([6, 4]);
-        ctx.strokeRect(minX - pad, minY - pad, maxX - minX + pad * 2, maxY - minY + pad * 2);
-        ctx.setLineDash([]);
-        const hs = 6;
-        ctx.fillStyle = '#6c5ce7';
-        for (const c of [
-          { x: minX - pad, y: minY - pad },
-          { x: maxX + pad, y: minY - pad },
-          { x: minX - pad, y: maxY + pad },
-          { x: maxX + pad, y: maxY + pad },
-        ]) {
-          ctx.fillRect(c.x - hs / 2, c.y - hs / 2, hs, hs);
-        }
-      }
-    }
-
-    ctx.restore();
-  }, [elements, viewport, selectedId, editingText, style]);
-
-  useEffect(() => { render(); }, [render]);
-  useEffect(() => {
-    const h = () => render();
-    window.addEventListener('resize', h);
-    return () => window.removeEventListener('resize', h);
-  }, [render]);
-
-  // ── Pointer Handlers ───────────────────────────
-  const handlePointerDown = useCallback(
-    (e: React.PointerEvent<HTMLCanvasElement>) => {
-      const rect = e.currentTarget.getBoundingClientRect();
-      const pt = screenToCanvas(e.clientX - rect.left, e.clientY - rect.top);
-
-      if (activeTool === 'hand' || e.button === 1) {
-        panStart.current = { x: e.clientX, y: e.clientY };
-        return;
-      }
-
-      if (activeTool === 'select') {
-        let found = false;
-        for (let i = elements.length - 1; i >= 0; i--) {
-          if (hitTest(pt, elements[i])) {
-            setSelectedId(elements[i].id);
-            dragStart.current = pt;
-            found = true;
-            break;
-          }
-        }
-        if (!found) setSelectedId(null);
-        return;
-      }
-
-      if (activeTool === 'eraser') {
-        for (let i = elements.length - 1; i >= 0; i--) {
-          if (hitTest(pt, elements[i])) {
-            pushState(elements);
-            const id = elements[i].id;
-            setElements((prev) => prev.filter((el) => el.id !== id));
-            sendDelete(id);
-            break;
-          }
-        }
-        return;
-      }
-
-      if (activeTool === 'text') {
-        if (editingText) {
-          // Let the native onBlur event handle the finalization when clicking elsewhere
-          return;
-        }
-        setEditingText({ pt, text: '' });
-        return;
-      }
-
-      pushState(elements);
-      isDrawing.current = true;
-      currentEl.current = {
-        id: generateId(),
-        type: activeTool,
-        points: [pt],
-        strokeColor: style.strokeColor,
-        fillColor: style.fillColor,
-        strokeWidth: style.strokeWidth,
-        opacity: style.opacity,
-      };
-      e.currentTarget.setPointerCapture(e.pointerId);
-    },
-    [activeTool, elements, screenToCanvas, style, pushState, sendDelete, sendDraw]
-  );
-
-  const handlePointerMove = useCallback(
-    (e: React.PointerEvent<HTMLCanvasElement>) => {
-      const rect = e.currentTarget.getBoundingClientRect();
-      const pt = screenToCanvas(e.clientX - rect.left, e.clientY - rect.top);
-
-      if (panStart.current) {
-        const dx = e.clientX - panStart.current.x;
-        const dy = e.clientY - panStart.current.y;
-        panStart.current = { x: e.clientX, y: e.clientY };
-        setViewport((v) => ({ ...v, offsetX: v.offsetX + dx, offsetY: v.offsetY + dy }));
-        return;
-      }
-
-      if (dragStart.current && selectedId) {
-        const dx = pt.x - dragStart.current.x;
-        const dy = pt.y - dragStart.current.y;
-        dragStart.current = pt;
-        setElements((prev) =>
-          prev.map((el) =>
-            el.id === selectedId
-              ? { ...el, points: el.points.map((p) => ({ x: p.x + dx, y: p.y + dy })) }
-              : el
-          )
-        );
-        return;
-      }
-
-      if (!isDrawing.current || !currentEl.current) return;
-
-      if (currentEl.current.type === 'pencil') {
-        currentEl.current = {
-          ...currentEl.current,
-          points: [...currentEl.current.points, pt],
-        };
-      } else {
-        currentEl.current = {
-          ...currentEl.current,
-          points: [currentEl.current.points[0], pt],
-        };
-      }
-      render();
-    },
-    [screenToCanvas, selectedId, render]
-  );
-
-  const handlePointerUp = useCallback(
-    () => {
-      if (panStart.current) {
-        panStart.current = null;
-        return;
-      }
-      if (dragStart.current) {
-        dragStart.current = null;
-        return;
-      }
-      if (!isDrawing.current || !currentEl.current) return;
-
-      isDrawing.current = false;
-      const finished = { ...currentEl.current };
-      currentEl.current = null;
-
-      if (finished.points.length >= 2) {
-        setElements((prev) => [...prev, finished]);
-        sendDraw(finished);
-      }
-    },
-    [sendDraw]
-  );
-
-  const handleWheel = useCallback((e: React.WheelEvent<HTMLCanvasElement>) => {
-    e.preventDefault();
-    const delta = e.deltaY > 0 ? 0.9 : 1.1;
-    const rect = (e.target as HTMLCanvasElement).getBoundingClientRect();
-    const mx = e.clientX - rect.left;
-    const my = e.clientY - rect.top;
-    setViewport((v) => {
-      const ns = Math.min(Math.max(v.scale * delta, 0.1), 5);
-      const sc = ns / v.scale;
-      return { scale: ns, offsetX: mx - (mx - v.offsetX) * sc, offsetY: my - (my - v.offsetY) * sc };
-    });
-  }, []);
-
-  // Keyboard
   const handleDelete = useCallback(() => {
     if (!selectedId) return;
     pushState(elements);
@@ -367,14 +136,25 @@ export default function CanvasPage() {
     onDelete: handleDelete,
   });
 
-  const getCursor = () => {
-    switch (activeTool) {
-      case 'hand': return 'grab';
-      case 'select': return 'default';
-      case 'text': return 'text';
-      case 'eraser': return 'not-allowed';
-      default: return 'crosshair';
-    }
+  const handleDownloadPNG = useCallback(() => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const exportCanvas = document.createElement('canvas');
+    exportCanvas.width = canvas.width;
+    exportCanvas.height = canvas.height;
+    const exportCtx = exportCanvas.getContext('2d');
+    if (!exportCtx) return;
+    exportCtx.fillStyle = '#ffffff';
+    exportCtx.fillRect(0, 0, exportCanvas.width, exportCanvas.height);
+    exportCtx.drawImage(canvas, 0, 0);
+    const link = document.createElement('a');
+    link.download = `canvas-${roomId || 'drawing'}.png`;
+    link.href = exportCanvas.toDataURL('image/png');
+    link.click();
+  }, [roomId]);
+
+  const handleLeaveRoom = () => {
+    navigate('/dashboard', { replace: true });
   };
 
   return (
@@ -382,18 +162,22 @@ export default function CanvasPage() {
       <Toolbar activeTool={activeTool} onToolChange={setActiveTool} />
       <StylePanel style={style} onStyleChange={setStyle} />
 
-      <canvas
-        ref={canvasRef}
-        className="main-canvas"
-        id="main-canvas"
-        style={{ cursor: getCursor() }}
+      <Canvas
+        ref={canvasComponentRef}
+        canvasRef={canvasRef}
+        elements={elements}
+        viewport={viewport}
+        currentEl={currentEl}
+        selectedId={selectedId}
+        editingText={editingText}
+        style={style}
+        activeTool={activeTool}
         onPointerDown={handlePointerDown}
         onPointerMove={handlePointerMove}
         onPointerUp={handlePointerUp}
         onWheel={handleWheel}
       />
 
-      {/* Inline Text Editing Overlay */}
       {editingText && (
         <input
           ref={textInputRef}
@@ -409,21 +193,92 @@ export default function CanvasPage() {
             left: editingText.pt.x * viewport.scale + viewport.offsetX,
             top: editingText.pt.y * viewport.scale + viewport.offsetY,
             font: `${style.strokeWidth * 8 * viewport.scale}px Inter, sans-serif`,
-            color: 'transparent', // The actual character rendering is handled by the canvas!
+            color: 'transparent',
             opacity: style.opacity,
             background: 'transparent',
             border: 'none',
             outline: 'none',
-            padding: 0,
-            margin: 0,
-            caretColor: style.strokeColor,
-            width: `${Math.max(1, editingText.text.length) + 2}ch`,
-            zIndex: 10
+            minWidth: '100px',
+            transform: 'translateY(-50%)',
+            zIndex: 10,
+            caretColor: '#6c5ce7',
           }}
         />
       )}
 
-      {/* Zoom indicator */}
+      <div className="canvas-hud">
+        <div className="participants-widget" id="participants-widget">
+          <button
+            className="participants-badge"
+            onClick={() => setShowParticipants((s) => !s)}
+            id="participants-btn"
+            title="Show participants"
+          >
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" />
+              <circle cx="9" cy="7" r="4" />
+              <path d="M23 21v-2a4 4 0 0 0-3-3.87" />
+              <path d="M16 3.13a4 4 0 0 1 0 7.75" />
+            </svg>
+            <span className="participants-count">{participants.length || 1}</span>
+          </button>
+
+          {showParticipants && (
+            <div className="participants-popover" id="participants-popover">
+              <div className="participants-popover-header">
+                <span>In this room</span>
+                <button
+                  className="participants-popover-close"
+                  onClick={() => setShowParticipants(false)}
+                  aria-label="Close"
+                >×</button>
+              </div>
+              <ul className="participants-list">
+                {participants.length > 0 ? participants.map((name, i) => (
+                  <li key={i} className="participants-item">
+                    <span className="participant-avatar">
+                      {name.charAt(0).toUpperCase()}
+                    </span>
+                    <span className="participant-name">{name}</span>
+                  </li>
+                )) : (
+                  <li className="participants-item participants-empty">Only you</li>
+                )}
+              </ul>
+            </div>
+          )}
+        </div>
+
+        <button
+          className="canvas-action-btn"
+          onClick={handleDownloadPNG}
+          id="download-canvas-btn"
+          title="Download canvas as PNG"
+        >
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+            <polyline points="7 10 12 15 17 10" />
+            <line x1="12" y1="15" x2="12" y2="3" />
+          </svg>
+          <span>Export</span>
+        </button>
+
+        <button
+          className="canvas-action-btn"
+          onClick={handleLeaveRoom}
+          id="leave-room-btn"
+          title="Leave Room"
+          style={{ color: '#ff6b6b' }}
+        >
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" />
+            <polyline points="16 17 21 12 16 7" />
+            <line x1="21" y1="12" x2="9" y2="12" />
+          </svg>
+          <span>Leave</span>
+        </button>
+      </div>
+
       <div className="zoom-indicator">
         {Math.round(viewport.scale * 100)}%
       </div>

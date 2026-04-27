@@ -82,6 +82,16 @@
   cursor: not-allowed;
 }
 
+/* Rooms Heading */
+.rooms-heading {
+  font-size: 1.1rem;
+  font-weight: 700;
+  color: var(--text-secondary);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  margin: 0 0 16px;
+}
+
 /* Rooms Grid */
 .rooms-grid {
   display: grid;

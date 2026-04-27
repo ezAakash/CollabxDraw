@@ -7,7 +7,7 @@ import bcrypt from "bcrypt"
 export const roomRouter: Router = express.Router()
 
 
-roomRouter.post("/create", Auth(),  async (req, res) => {
+roomRouter.post("/create", Auth(), async (req, res) => {
 
     const result = CreateRoomSchema.safeParse(req.body)
 
@@ -16,7 +16,7 @@ roomRouter.post("/create", Auth(),  async (req, res) => {
             message: "Incorrect input format",
             errors: result.error.issues[0]
         })
-    } 
+    }
 
     const { slug, password } = req.body
 
@@ -35,14 +35,14 @@ roomRouter.post("/create", Auth(),  async (req, res) => {
             room
         })
     }
-    catch(err) {
-        return res.status(500).json({ message: "Something went wrong either DB not connected or Room slug already exist.."})
+    catch (err) {
+        return res.status(500).json({ message: "Something went wrong either DB not connected or Room slug already exist.." })
     }
 })
 
 roomRouter.post("/join", Auth(), async (req, res) => {
     const result = JoinRoomSchema.safeParse(req.body)
-    
+
     if (!result.success) {
         return res.status(400).json({
             message: "Incorrect input format",
@@ -78,7 +78,9 @@ roomRouter.post("/join", Auth(), async (req, res) => {
 
 roomRouter.get("/rooms", Auth(), async (req, res) => {
     try {
+        const userId = (req as any).userId;
         const rooms = await prisma.room.findMany({
+            where: { adminId: userId },
             orderBy: { createAt: "desc" },
             include: {
                 admin: {
@@ -89,6 +91,29 @@ roomRouter.get("/rooms", Auth(), async (req, res) => {
         res.json({ rooms })
     } catch (err) {
         res.status(500).json({ message: "Failed to fetch rooms" })
+    }
+})
+
+roomRouter.delete("/:roomId", Auth(), async (req, res) => {
+    try {
+        const userId = (req as any).userId;
+        const roomId = parseInt(req.params.roomId);
+
+        const room = await prisma.room.findUnique({ where: { id: roomId } });
+        if (!room) {
+            return res.status(404).json({ message: "Room not found" });
+        }
+        if (room.adminId !== userId) {
+            return res.status(403).json({ message: "Only the room owner can delete this room" });
+        }
+
+        // Delete all elements first, then the room
+        await prisma.drawElement.deleteMany({ where: { roomId } });
+        await prisma.room.delete({ where: { id: roomId } });
+
+        res.json({ message: "Room deleted successfully" });
+    } catch (err) {
+        res.status(500).json({ message: "Failed to delete room" });
     }
 })
 

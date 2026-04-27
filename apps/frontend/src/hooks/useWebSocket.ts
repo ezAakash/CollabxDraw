@@ -10,6 +10,7 @@ interface UseWebSocketOptions {
   onElementUpdated: (element: DrawElement) => void;
   onElementDeleted: (elementId: string) => void;
   onJoined: (elements: DrawElement[]) => void;
+  onParticipantUpdate?: (participants: string[], count: number) => void;
   onError?: (message: string) => void;
 }
 
@@ -21,6 +22,7 @@ export function useWebSocket({
   onElementUpdated,
   onElementDeleted,
   onJoined,
+  onParticipantUpdate,
   onError
 }: UseWebSocketOptions) {
   const wsRef = useRef<WebSocket | null>(null);
@@ -58,6 +60,11 @@ export function useWebSocket({
           case 'element_deleted':
             onElementDeleted(message.payload.elementId);
             break;
+          case 'participant_update':
+            if (onParticipantUpdate) {
+              onParticipantUpdate(message.payload.participants || [], message.payload.count || 0);
+            }
+            break;
         }
       } catch (err) {
         console.error('WS message parse error:', err);
@@ -74,7 +81,7 @@ export function useWebSocket({
       console.error('WS error:', err);
       ws.close();
     };
-  }, [token, roomId, onElementCreated, onElementUpdated, onElementDeleted, onJoined]);
+  }, [token, roomId, onElementCreated, onElementUpdated, onElementDeleted, onJoined, onParticipantUpdate]);
 
   useEffect(() => {
     connect();

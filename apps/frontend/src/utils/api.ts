@@ -66,6 +66,11 @@ export async function getRooms() {
   return res.json();
 }
 
+export async function deleteRoom(roomId: number) {
+  const res = await apiFetch(`/room/${roomId}`, { method: 'DELETE' });
+  return res.json();
+}
+
 export async function getRoomElements(roomId: number) {
   const res = await apiFetch(`/room/${roomId}/elements`);
   return res.json();
