@@ -8,6 +8,7 @@ const app = express()
 const allowedOrigins = [
     "https://collabxdraw.vercel.app",
     "http://localhost:5173",
+    "https://collabxdraw.live"
 ];
 
 app.use(cors({
